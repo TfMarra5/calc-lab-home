@@ -44,6 +44,20 @@ int main(int argc, char *argv[]) {
     if (output_dir != NULL) {
         printf("Output directory: %s\n", output_dir);
     }
+    // r opens existent file for reading
+        FILE *input = fopen(input_file, "r");
+
+    if (input == NULL) {
+        perror(input_file);
+        return 1;
+    }
+
+    printf("Input file opened successfully.\n");
+
+    if (fclose(input) != 0) {
+        perror(input_file);
+        return 1;
+    }
 
     return 0;
 }
