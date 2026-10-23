@@ -4,6 +4,8 @@
 // Resources used: course slides by Professor Evalds Masalskis, W3Schools C Tutorial, previous C labs, OpenAI ChatGPT/Codex (guided explanations).
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 // Argument handling based on lecture 5, slide 27.
 // AI assistance: OpenAI ChatGPT/Codex, prompts "next" and follow-up
@@ -35,9 +37,30 @@ int main(int argc, char *argv[]) {
         return 1;
 }
     }
-     if (input_file == NULL) {
+        if (input_file == NULL) {
         fprintf(stderr, "Error: No input file provided.\n");
         return 1;
+    }
+    // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
+    // Help with mkdir, EEXIST and checking that an existing path is a directory.
+    if (output_dir != NULL) {
+        if (mkdir(output_dir, 0755) != 0) {
+            if (errno != EEXIST) { // will inform the error reason
+                perror(output_dir);
+                return 1;
+            }
+
+            struct stat info;
+            if (stat(output_dir, &info) != 0) {
+                perror(output_dir);
+                return 1;
+            }
+
+            if (!S_ISDIR(info.st_mode)) {
+                fprintf(stderr, "Error: Output path is not a directory.\n");
+                return 1;
+            }
+        }
     }
 
     printf("Input file: %s\n", input_file);
