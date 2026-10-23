@@ -13,6 +13,7 @@
 // Argv - Argument Vector. An array of strings that contain each argument.
 int main(int argc, char *argv[]) {
     const char *output_dir = NULL;
+    const char *input_file = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0) {
@@ -24,8 +25,22 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        else if (argv[i][0] == '-') {
+            fprintf(stderr, "Error: Unknown option: %s\n", argv[i]);
+                return 1;
+        } else if (input_file == NULL) {
+            input_file = argv[i];
+        } else {
+        fprintf(stderr, "Error: Too many input files.\n");
+        return 1;
+}
+    }
+     if (input_file == NULL) {
+        fprintf(stderr, "Error: No input file provided.\n");
+        return 1;
     }
 
+    printf("Input file: %s\n", input_file);
     if (output_dir != NULL) {
         printf("Output directory: %s\n", output_dir);
     }
