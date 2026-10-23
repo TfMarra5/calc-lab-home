@@ -54,6 +54,18 @@ int main(int argc, char *argv[]) {
 
     printf("Input file opened successfully.\n");
 
+    char buffer[256];
+
+    while (fgets(buffer, sizeof(buffer), input) != NULL) {
+        printf("%s", buffer);
+    }
+
+    if (ferror(input)) {
+        fprintf(stderr, "Error reading input file.\n");
+        fclose(input);
+        return 1;
+    }
+
     if (fclose(input) != 0) {
         perror(input_file);
         return 1;
