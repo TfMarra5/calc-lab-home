@@ -8,6 +8,72 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 
+// Help with token types and storing token positions.
+
+typedef enum {
+    TOKEN_END,
+    TOKEN_NEWLINE,
+    TOKEN_NUMBER,
+    TOKEN_PLUS,
+    TOKEN_MINUS,
+    TOKEN_MULTIPLY,
+    TOKEN_DIVIDE,
+    TOKEN_POWER,
+    TOKEN_LEFT_PAREN,
+    TOKEN_RIGHT_PAREN,
+    TOKEN_INVALID
+} TokenType;
+
+typedef struct {
+    TokenType type;
+    long long integer_value;
+    size_t position;
+} Token;
+
+Token next_token(const char *text, size_t *index) {
+    // Skip spaces without losing their contribution to file positions.
+    while (text[*index] == ' ' || text[*index] == '\t') {
+        (*index)++;
+    }
+
+    Token token = {TOKEN_INVALID, 0, *index + 1};
+    char ch = text[*index];
+
+    if (ch == '\0') {
+        token.type = TOKEN_END;
+        return token;
+    }
+
+    if (ch >= '0' && ch <= '9') {
+        token.type = TOKEN_NUMBER;
+
+        while (text[*index] >= '0' && text[*index] <= '9') {
+            token.integer_value =
+                token.integer_value * 10 + (text[*index] - '0');
+            (*index)++;
+        }
+
+        return token;
+    }
+
+    switch (ch) {
+        case '+':
+            token.type = TOKEN_PLUS;
+            break;
+        case '-':
+            token.type = TOKEN_MINUS;
+            break;
+        case '\n':
+            token.type = TOKEN_NEWLINE;
+            break;
+        default:
+            token.type = TOKEN_INVALID;
+            break;
+    }
+
+    (*index)++;
+    return token;
+}
 // Argument handling based on lecture 5, slide 27.
 // AI assistance: OpenAI ChatGPT/Codex, prompts "next" and follow-up
 // code review messages. Help with variable scope, braces and -o handling.
@@ -187,7 +253,21 @@ int main(int argc, char *argv[]) {
     text[length] = '\0';
 
     printf("Characters read: %zu\n", length);
-    printf("%s", text);
+        size_t index = 0;
+    Token token;
+
+    do {
+        token = next_token(text, &index);
+
+        if (token.type == TOKEN_NUMBER) {
+            printf("Number: %lld at position %zu\n",
+                   token.integer_value, token.position);
+        } else {
+            printf("Token type: %d at position %zu\n",
+                   (int)token.type, token.position);
+        }
+    } while (token.type != TOKEN_END &&
+             token.type != TOKEN_INVALID);
 
     free(text);
     return 0;
