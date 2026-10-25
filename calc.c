@@ -106,22 +106,45 @@ void advance(Parser *parser) {
     parser->current = next_token(parser->text, &parser->index);
 }
 
-long long parse_integer(Parser *parser) {
-    if (parser->current.type != TOKEN_NUMBER) {
-        parser->error_position = parser->current.position;
-        return 0;
+long long parse_expression(Parser *parser);
+
+// AI assistance: OpenAI ChatGPT/Codex, prompt "parênteses".
+// Help with recursive parsing of grouped expressions and error positions.
+long long parse_primary(Parser *parser) {
+    if (parser->current.type == TOKEN_NUMBER) {
+        long long value = parser->current.integer_value;
+        advance(parser);
+        return value;
     }
 
-    long long value = parser->current.integer_value;
-    advance(parser);
-    return value;
+    if (parser->current.type == TOKEN_LEFT_PAREN) {
+        advance(parser);
+
+        long long value = parse_expression(parser);
+
+        if (parser->error_position != 0) {
+            return 0;
+        }
+
+        // A grouped expression must end with a closing parenthesis.
+        if (parser->current.type != TOKEN_RIGHT_PAREN) {
+            parser->error_position = parser->current.position;
+            return 0;
+        }
+
+        advance(parser);
+        return value;
+    }
+
+    parser->error_position = parser->current.position;
+    return 0;
 }
 // Help with multiplication/division precedence and error positions.
 // A term completes multiplication and division before addition/subtraction.
 // AI assistance: OpenAI ChatGPT/Codex, prompt "façamos isso".
 // Help with multiplication/division precedence and error positions.
 long long parse_term(Parser *parser) {
-    long long result = parse_integer(parser);
+    long long result = parse_primary(parser);
 
     while (parser->error_position == 0 &&
            (parser->current.type == TOKEN_MULTIPLY ||
@@ -130,7 +153,7 @@ long long parse_term(Parser *parser) {
         advance(parser);
 
         size_t right_position = parser->current.position;
-        long long right = parse_integer(parser);
+        long long right = parse_primary(parser);
 
         if (parser->error_position != 0) {
             return 0;
