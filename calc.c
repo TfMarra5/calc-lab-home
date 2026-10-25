@@ -41,6 +41,17 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Error: No input file provided.\n");
         return 1;
     }
+
+        const char *input_name = strrchr(input_file, '/');
+
+    if (input_name != NULL) {
+        input_name++;
+    } else {
+        input_name = input_file;
+    }
+
+    printf("Input filename: %s\n", input_name);
+    
     // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
