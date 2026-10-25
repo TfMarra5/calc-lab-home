@@ -51,7 +51,18 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Input filename: %s\n", input_name);
-    
+
+        size_t base_length = strlen(input_name);
+
+    if (base_length >= 4 &&
+        strcmp(input_name + base_length - 4, ".txt") == 0) {
+        base_length -= 4;
+    }
+
+    printf("Input base: ");
+    fwrite(input_name, 1, base_length, stdout);
+    printf("\n");
+
     // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
