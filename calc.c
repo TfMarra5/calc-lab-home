@@ -43,6 +43,23 @@ Token next_token(const char *text, size_t *index) {
         (*index)++;
     }
 
+    // A # starts a comment only when preceded by spaces/tabs
+    // since the beginning of the line.
+    if (text[*index] == '#') {
+        size_t start = *index;
+
+        while (start > 0 &&
+               (text[start - 1] == ' ' || text[start - 1] == '\t')) {
+            start--;
+        }
+
+        if (start == 0 || text[start - 1] == '\n') {
+            while (text[*index] != '\n' && text[*index] != '\0') {
+                (*index)++;
+            }
+        }
+    }
+
     Token token = {TOKEN_INVALID, 0, *index + 1};
     char ch = text[*index];
 
