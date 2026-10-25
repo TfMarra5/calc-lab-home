@@ -30,6 +30,13 @@ typedef struct {
     size_t position;
 } Token;
 
+typedef struct {
+    const char *text;
+    size_t index;
+    Token current;
+    size_t error_position;
+} Parser;
+
 Token next_token(const char *text, size_t *index) {
     // Skip spaces without losing their contribution to file positions.
     while (text[*index] == ' ' || text[*index] == '\t') {
@@ -90,6 +97,49 @@ Token next_token(const char *text, size_t *index) {
 
     (*index)++;
     return token;
+}
+
+// Help with parser state and an initial integer addition/subtraction parser.
+// The operator loop evaluates addition and subtraction left to right.
+
+void advance(Parser *parser) {
+    parser->current = next_token(parser->text, &parser->index);
+}
+
+long long parse_integer(Parser *parser) {
+    if (parser->current.type != TOKEN_NUMBER) {
+        parser->error_position = parser->current.position;
+        return 0;
+    }
+
+    long long value = parser->current.integer_value;
+    advance(parser);
+    return value;
+}
+
+long long parse_expression(Parser *parser) {
+    long long result = parse_integer(parser);
+
+    while (parser->error_position == 0 &&
+           (parser->current.type == TOKEN_PLUS ||
+            parser->current.type == TOKEN_MINUS)) {
+        TokenType operation = parser->current.type;
+        advance(parser);
+
+        long long right = parse_integer(parser);
+
+        if (parser->error_position != 0) {
+            return 0;
+        }
+
+        if (operation == TOKEN_PLUS) {
+            result += right;
+        } else {
+            result -= right;
+        }
+    }
+
+    return result;
 }
 // Argument handling based on lecture 5, slide 27.
 // AI assistance: OpenAI ChatGPT/Codex, prompts "next" and follow-up
@@ -269,22 +319,35 @@ int main(int argc, char *argv[]) {
 
     text[length] = '\0';
 
+        text[length] = '\0';
+
     printf("Characters read: %zu\n", length);
-        size_t index = 0;
-    Token token;
 
-    do {
-        token = next_token(text, &index);
+    Parser parser = {0};
+    parser.text = text;
+    advance(&parser);
 
-        if (token.type == TOKEN_NUMBER) {
-            printf("Number: %lld at position %zu\n",
-                   token.integer_value, token.position);
-        } else {
-            printf("Token type: %d at position %zu\n",
-                   (int)token.type, token.position);
+    while (parser.current.type != TOKEN_END) {
+        if (parser.current.type == TOKEN_NEWLINE) {
+            advance(&parser);
+            continue;
         }
-    } while (token.type != TOKEN_END &&
-             token.type != TOKEN_INVALID);
+
+        long long result = parse_expression(&parser);
+
+        if (parser.error_position == 0 &&
+            parser.current.type != TOKEN_NEWLINE &&
+            parser.current.type != TOKEN_END) {
+            parser.error_position = parser.current.position;
+        }
+
+        if (parser.error_position != 0) {
+            printf("ERROR:%zu\n", parser.error_position);
+            break;
+        }
+
+        printf("Result: %lld\n", result);
+    }
 
     free(text);
     return 0;
