@@ -130,22 +130,65 @@ int main(int argc, char *argv[]) {
 
     printf("Input file opened successfully.\n");
 
-    char buffer[256];
+    // Help with a growing input buffer, realloc failure handling,
+    // and preserving characters for error positions.
 
-    while (fgets(buffer, sizeof(buffer), input) != NULL) {
-        printf("%s", buffer);
+        size_t capacity = 256;
+    size_t length = 0;
+    char *text = malloc(capacity);
+
+    if (text == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed.\n");
+        fclose(input);
+        return 1;
+    }
+
+    int ch;
+    while ((ch = fgetc(input)) != EOF) {
+        // Keep one extra byte available for the string terminator.
+        if (length == capacity - 1) {
+            if (capacity > (size_t)-1 / 2) {
+                fprintf(stderr, "Error: Input is too large.\n");
+                free(text);
+                fclose(input);
+                return 1;
+            }
+
+            size_t new_capacity = capacity * 2;
+            char *temporary = realloc(text, new_capacity);
+
+            if (temporary == NULL) {
+                fprintf(stderr, "Error: Memory allocation failed.\n");
+                free(text);
+                fclose(input);
+                return 1;
+            }
+
+            text = temporary;
+            capacity = new_capacity;
+        }
+
+        text[length++] = (char)ch;
     }
 
     if (ferror(input)) {
-        fprintf(stderr, "Error reading input file.\n");
+        fprintf(stderr, "Error: Failed to read input file.\n");
+        free(text);
         fclose(input);
         return 1;
     }
 
     if (fclose(input) != 0) {
         perror(input_file);
+        free(text);
         return 1;
     }
 
+    text[length] = '\0';
+
+    printf("Characters read: %zu\n", length);
+    printf("%s", text);
+
+    free(text);
     return 0;
 }
