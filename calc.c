@@ -63,6 +63,23 @@ Token next_token(const char *text, size_t *index) {
         case '-':
             token.type = TOKEN_MINUS;
             break;
+                    case '*':
+            if (text[*index + 1] == '*') {
+                token.type = TOKEN_POWER;
+                (*index)++;
+            } else {
+                token.type = TOKEN_MULTIPLY;
+            }
+            break;
+        case '/':
+            token.type = TOKEN_DIVIDE;
+            break;
+        case '(':
+            token.type = TOKEN_LEFT_PAREN;
+            break;
+        case ')':
+            token.type = TOKEN_RIGHT_PAREN;
+            break;
         case '\n':
             token.type = TOKEN_NEWLINE;
             break;
