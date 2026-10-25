@@ -116,9 +116,44 @@ long long parse_integer(Parser *parser) {
     advance(parser);
     return value;
 }
-
-long long parse_expression(Parser *parser) {
+// Help with multiplication/division precedence and error positions.
+// A term completes multiplication and division before addition/subtraction.
+// AI assistance: OpenAI ChatGPT/Codex, prompt "façamos isso".
+// Help with multiplication/division precedence and error positions.
+long long parse_term(Parser *parser) {
     long long result = parse_integer(parser);
+
+    while (parser->error_position == 0 &&
+           (parser->current.type == TOKEN_MULTIPLY ||
+            parser->current.type == TOKEN_DIVIDE)) {
+        TokenType operation = parser->current.type;
+        advance(parser);
+
+        size_t right_position = parser->current.position;
+        long long right = parse_integer(parser);
+
+        if (parser->error_position != 0) {
+            return 0;
+        }
+
+        if (operation == TOKEN_MULTIPLY) {
+            result *= right;
+        } else {
+            // Division-by-zero errors point to the right operand.
+            if (right == 0) {
+                parser->error_position = right_position;
+                return 1;
+            }
+
+            result /= right;
+        }
+    }
+
+    return result;
+}
+long long parse_expression(Parser *parser) {
+    
+    long long result = parse_term(parser);
 
     while (parser->error_position == 0 &&
            (parser->current.type == TOKEN_PLUS ||
@@ -126,7 +161,7 @@ long long parse_expression(Parser *parser) {
         TokenType operation = parser->current.type;
         advance(parser);
 
-        long long right = parse_integer(parser);
+        long long right = parse_term(parser);
 
         if (parser->error_position != 0) {
             return 0;
