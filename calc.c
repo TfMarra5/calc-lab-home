@@ -6,6 +6,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <stdlib.h>
 
 // Argument handling based on lecture 5, slide 27.
 // AI assistance: OpenAI ChatGPT/Codex, prompts "next" and follow-up
@@ -63,6 +64,20 @@ int main(int argc, char *argv[]) {
     fwrite(input_name, 1, base_length, stdout);
     printf("\n");
 
+        const char suffix[] = "_thomas_fernandes_araujo_251adb193.txt";
+    char *output_name = malloc(base_length + sizeof(suffix));
+
+    if (output_name == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed.\n");
+        return 1;
+    }
+
+    memcpy(output_name, input_name, base_length);
+    memcpy(output_name + base_length, suffix, sizeof(suffix));
+
+    printf("Output filename: %s\n", output_name);
+    free(output_name);
+    
     // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
