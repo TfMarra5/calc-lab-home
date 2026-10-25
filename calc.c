@@ -110,7 +110,7 @@ long long parse_expression(Parser *parser);
 
 // AI assistance: OpenAI ChatGPT/Codex, prompt "parênteses".
 // Help with recursive parsing of grouped expressions and error positions.
-long long parse_primary(Parser *parser) {
+long long parse_primary(Parser *parser) { // here
     if (parser->current.type == TOKEN_NUMBER) {
         long long value = parser->current.integer_value;
         advance(parser);
@@ -139,12 +139,59 @@ long long parse_primary(Parser *parser) {
     parser->error_position = parser->current.position;
     return 0;
 }
+
+// Help with right-associative powers and integer exponentiation.
+
+long long parse_power(Parser *parser) {
+    long long base = parse_primary(parser);
+
+    if (parser->error_position != 0) {
+        return 0;
+    }
+
+    if (parser->current.type == TOKEN_POWER) {
+        advance(parser);
+        size_t exponent_position = parser->current.position;
+
+        // Recursion groups a ** b ** c as a ** (b ** c).
+        long long exponent = parse_power(parser);
+
+        if (parser->error_position != 0) {
+            return 0;
+        }
+
+        if (exponent < 0) {
+            parser->error_position = exponent_position;
+            return 0;
+        }
+
+        long long result = 1;
+
+        // Repeated squaring avoids one multiplication per exponent unit.
+        while (exponent > 0) {
+            if (exponent % 2 != 0) {
+                result *= base;
+            }
+
+            exponent /= 2;
+
+            // Avoid an unnecessary final square that could overflow.
+            if (exponent > 0) {
+                base *= base;
+            }
+        }
+
+        return result;
+    }
+
+    return base;
+}
+
 // Help with multiplication/division precedence and error positions.
 // A term completes multiplication and division before addition/subtraction.
-// AI assistance: OpenAI ChatGPT/Codex, prompt "façamos isso".
-// Help with multiplication/division precedence and error positions.
-long long parse_term(Parser *parser) {
-    long long result = parse_primary(parser);
+
+long long parse_term(Parser *parser) { // here
+    long long result = parse_power(parser);
 
     while (parser->error_position == 0 &&
            (parser->current.type == TOKEN_MULTIPLY ||
@@ -153,7 +200,7 @@ long long parse_term(Parser *parser) {
         advance(parser);
 
         size_t right_position = parser->current.position;
-        long long right = parse_primary(parser);
+        long long right = parse_power(parser);
 
         if (parser->error_position != 0) {
             return 0;
