@@ -76,8 +76,24 @@ int main(int argc, char *argv[]) {
     memcpy(output_name + base_length, suffix, sizeof(suffix));
 
     printf("Output filename: %s\n", output_name);
+        if (output_dir != NULL) {
+        size_t path_size = strlen(output_dir) + strlen(output_name) + 2;
+        char *output_path = malloc(path_size);
+
+        if (output_path == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed.\n");
+            free(output_name);
+            return 1;
+        }
+
+        snprintf(output_path, path_size, "%s/%s",
+                 output_dir, output_name);
+
+        printf("Output path: %s\n", output_path);
+        free(output_path);
+    }
     free(output_name);
-    
+
     // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
