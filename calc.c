@@ -125,7 +125,7 @@ void advance(Parser *parser) {
 
 long long parse_expression(Parser *parser);
 
-// AI assistance: OpenAI ChatGPT/Codex, prompt "parênteses".
+// AI assistance: OpenAI ChatGPT/Codex
 // Help with recursive parsing of grouped expressions and error positions.
 long long parse_primary(Parser *parser) { // here
     if (parser->current.type == TOKEN_NUMBER) {
@@ -263,8 +263,82 @@ long long parse_expression(Parser *parser) {
 
     return result;
 }
+
+// Validate the whole input before writing any results.
+// Two passes avoid storing a separate array of results.
+int write_results(const char *text, const char *output_path) {
+    Parser parser = {0};
+    parser.text = text;
+    advance(&parser);
+
+    // First pass: find the first error without writing partial results.
+    while (parser.current.type != TOKEN_END) {
+        if (parser.current.type == TOKEN_NEWLINE) {
+            advance(&parser);
+            continue;
+        }
+
+        parse_expression(&parser);
+
+        if (parser.error_position == 0 &&
+            parser.current.type != TOKEN_NEWLINE &&
+            parser.current.type != TOKEN_END) {
+            parser.error_position = parser.current.position;
+        }
+
+        if (parser.error_position != 0) {
+            break;
+        }
+    }
+
+    FILE *output = fopen(output_path, "w");
+    if (output == NULL) {
+        perror(output_path);
+        return 1;
+    }
+
+    int write_failed = 0;
+
+    if (parser.error_position != 0) {
+        if (fprintf(output, "ERROR:%zu\n",
+                    parser.error_position) < 0) {
+            write_failed = 1;
+        }
+    } else {
+        // Second pass: the input is valid, so write each result.
+        parser = (Parser){0};
+        parser.text = text;
+        advance(&parser);
+
+        while (parser.current.type != TOKEN_END) {
+            if (parser.current.type == TOKEN_NEWLINE) {
+                advance(&parser);
+                continue;
+            }
+
+            long long result = parse_expression(&parser);
+
+            if (fprintf(output, "%lld\n", result) < 0) {
+                write_failed = 1;
+                break;
+            }
+        }
+    }
+
+    if (fclose(output) != 0) {
+        write_failed = 1;
+    }
+
+    if (write_failed) {
+        fprintf(stderr, "Error: Failed to write output file.\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 // Argument handling based on lecture 5, slide 27.
-// AI assistance: OpenAI ChatGPT/Codex, prompts "next" and follow-up
+// AI assistance: OpenAI ChatGPT/Codex
 // code review messages. Help with variable scope, braces and -o handling.
 // Conversation history: to be supplied before submission.
 
@@ -349,7 +423,7 @@ int main(int argc, char *argv[]) {
     }
     free(output_name);
 
-    // AI assistance: OpenAI ChatGPT/Codex, prompt "proximo".
+    // AI assistance: OpenAI ChatGPT/Codex
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
         if (mkdir(output_dir, 0755) != 0) {
@@ -445,32 +519,41 @@ int main(int argc, char *argv[]) {
 
     printf("Characters read: %zu\n", length);
 
-    Parser parser = {0};
-    parser.text = text;
-    advance(&parser);
-
-    while (parser.current.type != TOKEN_END) {
-        if (parser.current.type == TOKEN_NEWLINE) {
-            advance(&parser);
-            continue;
-        }
-
-        long long result = parse_expression(&parser);
-
-        if (parser.error_position == 0 &&
-            parser.current.type != TOKEN_NEWLINE &&
-            parser.current.type != TOKEN_END) {
-            parser.error_position = parser.current.position;
-        }
-
-        if (parser.error_position != 0) {
-            printf("ERROR:%zu\n", parser.error_position);
-            break;
-        }
-
-        printf("Result: %lld\n", result);
+        if (output_dir == NULL) {
+        fprintf(stderr, "Error: Please use -o for this version.\n");
+        free(text);
+        return 1;
     }
 
+    // Rebuild the output name: the earlier diagnostic code freed it.
+    output_name = malloc(base_length + sizeof(suffix));
+
+    if (output_name == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed.\n");
+        free(text);
+        return 1;
+    }
+
+    memcpy(output_name, input_name, base_length);
+    memcpy(output_name + base_length, suffix, sizeof(suffix));
+
+    size_t path_size = strlen(output_dir) + strlen(output_name) + 2;
+    char *output_path = malloc(path_size);
+
+    if (output_path == NULL) {
+        fprintf(stderr, "Error: Memory allocation failed.\n");
+        free(output_name);
+        free(text);
+        return 1;
+    }
+
+    snprintf(output_path, path_size, "%s/%s",
+             output_dir, output_name);
+    free(output_name);
+
+    int status = write_results(text, output_path);
+
+    free(output_path);
     free(text);
-    return 0;
+    return status;
 }
