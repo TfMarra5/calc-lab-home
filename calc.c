@@ -12,6 +12,10 @@
 
 // Help with token types and storing token positions.
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "proximo, vai falando a % do progresso" and "feito".
+// Help defining token types, values and 1-based file positions.
+
 typedef enum {
     TOKEN_END,
     TOKEN_NEWLINE,
@@ -25,6 +29,8 @@ typedef enum {
     TOKEN_RIGHT_PAREN,
     TOKEN_INVALID
 } TokenType;
+
+
 
 typedef struct {
     TokenType type;
@@ -40,6 +46,12 @@ typedef struct {
     Token current;
     size_t error_position;
 } Parser;
+
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "feito", "continuemos", "prosseguimos" and "números decimais".
+// Help recognizing numbers, operators and full-line comments.
+// The index counts every character, including skipped spaces and comments.
+// Token positions are index + 1 because the lab uses 1-based positions.
 
 Token next_token(const char *text, size_t *index) {
     // Skip spaces without losing their contribution to file positions.
@@ -177,6 +189,12 @@ double as_double(Value value) {
         : (double)value.integer_value;
 }
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "façamos isso", "potencia", "números decimais" and "compilou".
+// Help implementing arithmetic, integer powers and mixed numeric types.
+// Division by zero points to the right operand; negative integer
+// exponents point to the exponent; non-finite results point to the operator.
+
 Value apply_operation(Parser *parser, Value left, Value right,
                       TokenType operation, size_t operator_position,
                       size_t right_position) {
@@ -261,6 +279,11 @@ Value apply_operation(Parser *parser, Value left, Value right,
     return result;
 }
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompt: "parênteses".
+// Help parsing grouped expressions recursively.
+// A missing operand or closing parenthesis is reported at the current token.
+
 Value parse_primary(Parser *parser) {
     Value value = {0};
 
@@ -293,6 +316,10 @@ Value parse_primary(Parser *parser) {
     return value;
 }
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompt: "potencia".
+// Help using recursion so a ** b ** c groups as a ** (b ** c).
+
 Value parse_power(Parser *parser) {
     Value left = parse_primary(parser);
 
@@ -313,6 +340,11 @@ Value parse_power(Parser *parser) {
 
     return left;
 }
+
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompt: "façamos isso".
+// Help separating precedence levels: a term finishes multiplication
+// and division before the expression applies addition or subtraction.
 
 Value parse_term(Parser *parser) {
     Value left = parse_power(parser);
@@ -338,6 +370,10 @@ Value parse_term(Parser *parser) {
     return left;
 }
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "feito" and subsequent code-review messages.
+// Help implementing addition and subtraction with a left-to-right loop.
+
 Value parse_expression(Parser *parser) {
     Value left = parse_term(parser);
 
@@ -362,8 +398,10 @@ Value parse_expression(Parser *parser) {
     return left;
 }
 
-// Validate the whole input before writing any results.
-// Two passes avoid storing a separate array of results.
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "e agora?" and "compilado".
+// Help validating the entire input before writing results.
+// Two passes prevent partial results without storing a separate result array.
 int write_results(const char *text, const char *output_path) {
     Parser parser = {0};
     parser.text = text;
@@ -445,9 +483,12 @@ int write_results(const char *text, const char *output_path) {
 // Argument handling based on lecture 5, slide 27.
 // AI assistance: OpenAI ChatGPT/Codex
 // code review messages. Help with variable scope, braces and -o handling.
-// Conversation history: to be supplied before submission.
+// Conversation history:    https://chatgpt.com/s/cx_6ae12553e25c8191aec76ff909ad4d78
 
-// Argv - Argument Vector. An array of strings that contain each argument.
+// Based on lecture 5: command-line arguments and file operations.
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "next", "prosseguir", "proximo" and follow-up code reviews.
+// Help validating arguments, opening files and building output paths.
 int run_calculator(int argc, char *argv[], char **default_directory) {
     const char *output_dir = NULL;
     const char *input_file = NULL;
@@ -550,7 +591,8 @@ int run_calculator(int argc, char *argv[], char **default_directory) {
     }
     free(output_name);
 
-    // AI assistance: OpenAI ChatGPT/Codex
+    // AI assistance: OpenAI ChatGPT/Codex.
+    // Prompt: "proximo".
     // Help with mkdir, EEXIST and checking that an existing path is a directory.
     if (output_dir != NULL) {
         if (mkdir(output_dir, 0755) != 0) {
@@ -586,8 +628,12 @@ int run_calculator(int argc, char *argv[], char **default_directory) {
 
     printf("Input file opened successfully.\n");
 
-    // Help with a growing input buffer, realloc failure handling,
-    // and preserving characters for error positions.
+// Based on lecture 6: malloc, realloc and free.
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompt: "proximos".
+// Help reading input into a dynamically growing buffer.
+// Doubling capacity avoids reallocating and copying for every character.
+// A temporary pointer preserves the original allocation if realloc fails.
 
         size_t capacity = 256;
     size_t length = 0;
@@ -641,8 +687,6 @@ int run_calculator(int argc, char *argv[], char **default_directory) {
     }
 
     text[length] = '\0';
-
-        text[length] = '\0';
 
     printf("Characters read: %zu\n", length);
 
