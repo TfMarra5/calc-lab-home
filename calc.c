@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <math.h>
 
 // Help with token types and storing token positions.
 
@@ -29,6 +30,8 @@ typedef struct {
     TokenType type;
     long long integer_value;
     size_t position;
+    double float_value;
+    int is_float;
 } Token;
 
 typedef struct {
@@ -61,7 +64,9 @@ Token next_token(const char *text, size_t *index) {
         }
     }
 
-    Token token = {TOKEN_INVALID, 0, *index + 1};
+    Token token = {0};
+    token.type = TOKEN_INVALID;
+    token.position = *index + 1;
     char ch = text[*index];
 
     if (ch == '\0') {
@@ -69,13 +74,44 @@ Token next_token(const char *text, size_t *index) {
         return token;
     }
 
+    // AI assistance: OpenAI ChatGPT/Codex, prompt "números decimais".
+    // Check the lab's numeric grammar before converting the value.
     if (ch >= '0' && ch <= '9') {
-        token.type = TOKEN_NUMBER;
+        size_t start = *index;
 
         while (text[*index] >= '0' && text[*index] <= '9') {
-            token.integer_value =
-                token.integer_value * 10 + (text[*index] - '0');
             (*index)++;
+        }
+
+        if (text[*index] == '.') {
+            size_t dot_position = *index + 1;
+            (*index)++;
+
+            // A decimal point must be followed by at least one digit.
+            if (text[*index] < '0' || text[*index] > '9') {
+                token.position = dot_position;
+                return token;
+            }
+
+            token.is_float = 1;
+
+            while (text[*index] >= '0' && text[*index] <= '9') {
+                (*index)++;
+            }
+        }
+
+        // strtod accepts scientific notation, but this lab forbids it.
+        if (text[*index] == 'e' || text[*index] == 'E') {
+            token.position = *index + 1;
+            return token;
+        }
+
+        token.type = TOKEN_NUMBER;
+
+        if (token.is_float) {
+            token.float_value = strtod(text + start, NULL);
+        } else {
+            token.integer_value = strtoll(text + start, NULL, 10);
         }
 
         return token;
@@ -117,6 +153,12 @@ Token next_token(const char *text, size_t *index) {
     return token;
 }
 
+typedef struct {
+    long long integer_value;
+    double float_value;
+    int is_float;
+} Value;
+
 // Help with parser state and an initial integer addition/subtraction parser.
 // The operator loop evaluates addition and subtraction left to right.
 
@@ -124,30 +166,123 @@ void advance(Parser *parser) {
     parser->current = next_token(parser->text, &parser->index);
 }
 
-long long parse_expression(Parser *parser);
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompts: "números decimais" and "compilou".
+// Preserve integer arithmetic unless either operand is a float.
+Value parse_expression(Parser *parser);
 
-// AI assistance: OpenAI ChatGPT/Codex
-// Help with recursive parsing of grouped expressions and error positions.
-long long parse_primary(Parser *parser) { // here
+double as_double(Value value) {
+    return value.is_float
+        ? value.float_value
+        : (double)value.integer_value;
+}
+
+Value apply_operation(Parser *parser, Value left, Value right,
+                      TokenType operation, size_t operator_position,
+                      size_t right_position) {
+    Value result = {0};
+
+    if (operation == TOKEN_DIVIDE) {
+        int zero = right.is_float
+            ? right.float_value == 0.0
+            : right.integer_value == 0;
+
+        if (zero) {
+            parser->error_position = right_position;
+            return result;
+        }
+    }
+
+    if (left.is_float || right.is_float) {
+        double a = as_double(left);
+        double b = as_double(right);
+        result.is_float = 1;
+
+        switch (operation) {
+            case TOKEN_PLUS:     result.float_value = a + b; break;
+            case TOKEN_MINUS:    result.float_value = a - b; break;
+            case TOKEN_MULTIPLY: result.float_value = a * b; break;
+            case TOKEN_DIVIDE:   result.float_value = a / b; break;
+            case TOKEN_POWER:    result.float_value = pow(a, b); break;
+            default:
+                parser->error_position = operator_position;
+                return result;
+        }
+
+        // Non-finite floating results are reported at the operator.
+        if (!isfinite(result.float_value)) {
+            parser->error_position = operator_position;
+        }
+
+        return result;
+    }
+
+    long long a = left.integer_value;
+    long long b = right.integer_value;
+
+    switch (operation) {
+        case TOKEN_PLUS:
+            result.integer_value = a + b;
+            break;
+        case TOKEN_MINUS:
+            result.integer_value = a - b;
+            break;
+        case TOKEN_MULTIPLY:
+            result.integer_value = a * b;
+            break;
+        case TOKEN_DIVIDE:
+            result.integer_value = a / b;
+            break;
+        case TOKEN_POWER:
+            if (b < 0) {
+                parser->error_position = right_position;
+                return result;
+            }
+
+            result.integer_value = 1;
+
+            while (b > 0) {
+                if (b % 2 != 0) {
+                    result.integer_value *= a;
+                }
+
+                b /= 2;
+
+                if (b > 0) {
+                    a *= a;
+                }
+            }
+            break;
+        default:
+            parser->error_position = operator_position;
+            break;
+    }
+
+    return result;
+}
+
+Value parse_primary(Parser *parser) {
+    Value value = {0};
+
     if (parser->current.type == TOKEN_NUMBER) {
-        long long value = parser->current.integer_value;
+        value.integer_value = parser->current.integer_value;
+        value.float_value = parser->current.float_value;
+        value.is_float = parser->current.is_float;
         advance(parser);
         return value;
     }
 
     if (parser->current.type == TOKEN_LEFT_PAREN) {
         advance(parser);
-
-        long long value = parse_expression(parser);
+        value = parse_expression(parser);
 
         if (parser->error_position != 0) {
-            return 0;
+            return value;
         }
 
-        // A grouped expression must end with a closing parenthesis.
         if (parser->current.type != TOKEN_RIGHT_PAREN) {
             parser->error_position = parser->current.position;
-            return 0;
+            return value;
         }
 
         advance(parser);
@@ -155,114 +290,76 @@ long long parse_primary(Parser *parser) { // here
     }
 
     parser->error_position = parser->current.position;
-    return 0;
+    return value;
 }
 
-// Help with right-associative powers and integer exponentiation.
+Value parse_power(Parser *parser) {
+    Value left = parse_primary(parser);
 
-long long parse_power(Parser *parser) {
-    long long base = parse_primary(parser);
-
-    if (parser->error_position != 0) {
-        return 0;
-    }
-
-    if (parser->current.type == TOKEN_POWER) {
+    if (parser->error_position == 0 &&
+        parser->current.type == TOKEN_POWER) {
+        size_t operator_position = parser->current.position;
         advance(parser);
-        size_t exponent_position = parser->current.position;
+        size_t right_position = parser->current.position;
 
-        // Recursion groups a ** b ** c as a ** (b ** c).
-        long long exponent = parse_power(parser);
+        // Recursion makes a ** b ** c mean a ** (b ** c).
+        Value right = parse_power(parser);
 
-        if (parser->error_position != 0) {
-            return 0;
+        if (parser->error_position == 0) {
+            left = apply_operation(parser, left, right, TOKEN_POWER,
+                                   operator_position, right_position);
         }
-
-        if (exponent < 0) {
-            parser->error_position = exponent_position;
-            return 0;
-        }
-
-        long long result = 1;
-
-        // Repeated squaring avoids one multiplication per exponent unit.
-        while (exponent > 0) {
-            if (exponent % 2 != 0) {
-                result *= base;
-            }
-
-            exponent /= 2;
-
-            // Avoid an unnecessary final square that could overflow.
-            if (exponent > 0) {
-                base *= base;
-            }
-        }
-
-        return result;
     }
 
-    return base;
+    return left;
 }
 
-// Help with multiplication/division precedence and error positions.
-// A term completes multiplication and division before addition/subtraction.
-
-long long parse_term(Parser *parser) { // here
-    long long result = parse_power(parser);
+Value parse_term(Parser *parser) {
+    Value left = parse_power(parser);
 
     while (parser->error_position == 0 &&
            (parser->current.type == TOKEN_MULTIPLY ||
             parser->current.type == TOKEN_DIVIDE)) {
         TokenType operation = parser->current.type;
+        size_t operator_position = parser->current.position;
         advance(parser);
-
         size_t right_position = parser->current.position;
-        long long right = parse_power(parser);
+
+        Value right = parse_power(parser);
 
         if (parser->error_position != 0) {
-            return 0;
+            return left;
         }
 
-        if (operation == TOKEN_MULTIPLY) {
-            result *= right;
-        } else {
-            // Division-by-zero errors point to the right operand.
-            if (right == 0) {
-                parser->error_position = right_position;
-                return 1;
-            }
-
-            result /= right;
-        }
+        left = apply_operation(parser, left, right, operation,
+                               operator_position, right_position);
     }
 
-    return result;
+    return left;
 }
-long long parse_expression(Parser *parser) {
-    
-    long long result = parse_term(parser);
+
+Value parse_expression(Parser *parser) {
+    Value left = parse_term(parser);
 
     while (parser->error_position == 0 &&
            (parser->current.type == TOKEN_PLUS ||
             parser->current.type == TOKEN_MINUS)) {
         TokenType operation = parser->current.type;
+        size_t operator_position = parser->current.position;
         advance(parser);
+        size_t right_position = parser->current.position;
 
-        long long right = parse_term(parser);
+        Value right = parse_term(parser);
 
         if (parser->error_position != 0) {
-            return 0;
+            return left;
         }
 
-        if (operation == TOKEN_PLUS) {
-            result += right;
-        } else {
-            result -= right;
-        }
+        left = apply_operation(parser, left, right, operation,
+                               operator_position, right_position);
     }
 
-    return result;
+    return left;
 }
 
 // Validate the whole input before writing any results.
@@ -317,9 +414,16 @@ int write_results(const char *text, const char *output_path) {
                 continue;
             }
 
-            long long result = parse_expression(&parser);
+            Value result = parse_expression(&parser);
+            int written;
 
-            if (fprintf(output, "%lld\n", result) < 0) {
+            if (result.is_float) {
+                written = fprintf(output, "%.15g\n", result.float_value);
+            } else {
+                written = fprintf(output, "%lld\n", result.integer_value);
+            }
+
+            if (written < 0) {
                 write_failed = 1;
                 break;
             }
