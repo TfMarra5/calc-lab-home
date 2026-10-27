@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <dirent.h>
 
 // Help with token types and storing token positions.
 
@@ -348,7 +349,8 @@ int run_calculator(int argc, char *argv[], char **default_directory) {
     const char *input_file = NULL;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-o") == 0) {
+        if (strcmp(argv[i], "-o") == 0 ||
+        strcmp(argv[i], "--output-dir") == 0) {
             if (i + 1 < argc) {
                 output_dir = argv[i + 1];
                 i++;
@@ -574,11 +576,198 @@ int run_calculator(int argc, char *argv[], char **default_directory) {
     return status;
 }
 
+// AI assistance: OpenAI ChatGPT/Codex.
+// Prompt: "completar a linha de comando: --output-dir, -d e --dir".
+// Directory traversal uses the concepts from lecture 5.
+// Only regular files ending in .txt are processed; no recursion.
+int process_directory(const char *input_dir, const char *output_dir) {
+    DIR *directory = opendir(input_dir);
+
+    if (directory == NULL) {
+        perror(input_dir);
+        return 1;
+    }
+
+    char *owned_output = NULL;
+
+    if (output_dir == NULL) {
+        const char suffix[] = "_thomas_251adb193";
+        size_t end = strlen(input_dir);
+
+        // Ignore trailing slashes when extracting the folder name.
+        while (end > 1 && input_dir[end - 1] == '/') {
+            end--;
+        }
+
+        size_t start = end;
+        while (start > 0 && input_dir[start - 1] != '/') {
+            start--;
+        }
+
+        size_t name_length = end - start;
+        owned_output = malloc(name_length + sizeof(suffix));
+
+        if (owned_output == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed.\n");
+            closedir(directory);
+            return 1;
+        }
+
+        memcpy(owned_output, input_dir + start, name_length);
+        memcpy(owned_output + name_length, suffix, sizeof(suffix));
+        output_dir = owned_output;
+    }
+
+    // Create the output folder even when the input folder is empty.
+    if (mkdir(output_dir, 0755) != 0 && errno != EEXIST) {
+        perror(output_dir);
+        free(owned_output);
+        closedir(directory);
+        return 1;
+    }
+
+    struct stat output_info;
+    if (stat(output_dir, &output_info) != 0) {
+        perror(output_dir);
+        free(owned_output);
+        closedir(directory);
+        return 1;
+    }
+
+    if (!S_ISDIR(output_info.st_mode)) {
+        fprintf(stderr, "Error: Output path is not a directory.\n");
+        free(owned_output);
+        closedir(directory);
+        return 1;
+    }
+
+    int status = 0;
+
+    while (1) {
+        // Reset errno so end-of-directory can be distinguished from failure.
+        errno = 0;
+        struct dirent *entry = readdir(directory);
+
+        if (entry == NULL) {
+            if (errno != 0) {
+                perror(input_dir);
+                status = 1;
+            }
+            break;
+        }
+
+        size_t length = strlen(entry->d_name);
+
+        if (length < 4 ||
+            strcmp(entry->d_name + length - 4, ".txt") != 0) {
+            continue;
+        }
+
+        size_t path_size = strlen(input_dir) + length + 2;
+        char *input_path = malloc(path_size);
+
+        if (input_path == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed.\n");
+            status = 1;
+            break;
+        }
+
+        snprintf(input_path, path_size, "%s/%s",
+                 input_dir, entry->d_name);
+
+        struct stat info;
+        if (stat(input_path, &info) != 0) {
+            perror(input_path);
+            free(input_path);
+            status = 1;
+            break;
+        }
+
+        // A folder may also have a name ending in .txt.
+        if (!S_ISREG(info.st_mode)) {
+            free(input_path);
+            continue;
+        }
+
+        // Reuse the existing single-file processor with an explicit output.
+        char *file_arguments[] = {
+            "calc", "-o", (char *)output_dir, input_path
+        };
+        char *unused_default = NULL;
+
+        int file_status =
+            run_calculator(4, file_arguments, &unused_default);
+
+        free(unused_default);
+        free(input_path);
+
+        if (file_status != 0) {
+            status = 1;
+            break;
+        }
+    }
+
+    if (closedir(directory) != 0) {
+        perror(input_dir);
+        status = 1;
+    }
+
+    free(owned_output);
+    return status;
+}
+
 int main(int argc, char *argv[]) {
+    const char *input_dir = NULL;
+    const char *input_file = NULL;
+    const char *output_dir = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-o") == 0 ||
+            strcmp(argv[i], "--output-dir") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: Missing output directory.\n");
+                return 1;
+            }
+            output_dir = argv[++i];
+        } else if (strcmp(argv[i], "-d") == 0 ||
+                   strcmp(argv[i], "--dir") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "Error: Missing input directory.\n");
+                return 1;
+            }
+            if (input_dir != NULL) {
+                fprintf(stderr, "Error: Multiple input directories.\n");
+                return 1;
+            }
+            input_dir = argv[++i];
+        } else if (argv[i][0] == '-') {
+            fprintf(stderr, "Error: Unknown option: %s\n", argv[i]);
+            return 1;
+        } else {
+            if (input_file != NULL) {
+                fprintf(stderr, "Error: Too many input files.\n");
+                return 1;
+            }
+            input_file = argv[i];
+        }
+    }
+
+    if (input_dir != NULL && input_file != NULL) {
+        fprintf(stderr, "Error: Choose an input file or a directory.\n");
+        return 1;
+    }
+
+    if (input_dir != NULL) {
+        return process_directory(input_dir, output_dir);
+    }
+
+    if (input_file == NULL) {
+        fprintf(stderr, "Error: No input file or directory provided.\n");
+        return 1;
+    }
+
     char *default_directory = NULL;
-
     int status = run_calculator(argc, argv, &default_directory);
-
     free(default_directory);
     return status;
 }
