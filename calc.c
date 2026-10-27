@@ -343,7 +343,7 @@ int write_results(const char *text, const char *output_path) {
 // Conversation history: to be supplied before submission.
 
 // Argv - Argument Vector. An array of strings that contain each argument.
-int main(int argc, char *argv[]) {
+int run_calculator(int argc, char *argv[], char **default_directory) {
     const char *output_dir = NULL;
     const char *input_file = NULL;
 
@@ -387,6 +387,27 @@ int main(int argc, char *argv[]) {
     if (base_length >= 4 &&
         strcmp(input_name + base_length - 4, ".txt") == 0) {
         base_length -= 4;
+    }
+
+    // AI assistance: OpenAI ChatGPT/Codex, prompt
+    // "implementar a pasta padrão quando -o não for informado".
+    // main owns this allocation so every return path releases it.
+    if (output_dir == NULL) {
+        const char directory_suffix[] = "_thomas_251adb193";
+
+        *default_directory =
+            malloc(base_length + sizeof(directory_suffix));
+
+        if (*default_directory == NULL) {
+            fprintf(stderr, "Error: Memory allocation failed.\n");
+            return 1;
+        }
+
+        memcpy(*default_directory, input_name, base_length);
+        memcpy(*default_directory + base_length,
+               directory_suffix, sizeof(directory_suffix));
+
+        output_dir = *default_directory;
     }
 
     printf("Input base: ");
@@ -519,11 +540,6 @@ int main(int argc, char *argv[]) {
 
     printf("Characters read: %zu\n", length);
 
-        if (output_dir == NULL) {
-        fprintf(stderr, "Error: Please use -o for this version.\n");
-        free(text);
-        return 1;
-    }
 
     // Rebuild the output name: the earlier diagnostic code freed it.
     output_name = malloc(base_length + sizeof(suffix));
@@ -555,5 +571,14 @@ int main(int argc, char *argv[]) {
 
     free(output_path);
     free(text);
+    return status;
+}
+
+int main(int argc, char *argv[]) {
+    char *default_directory = NULL;
+
+    int status = run_calculator(argc, argv, &default_directory);
+
+    free(default_directory);
     return status;
 }
